@@ -125,3 +125,30 @@ sides green, the whole broken, and nobody specifically is at fault.
 ```json
 { "orderId": 42, "amount": 1999, "createdAt": 1760025600 }
 ```
+
+Producer means cents and seconds, consumer reads euros and milliseconds → an invoice
+for 1999 € dated January 1970. Same mechanism as wrong stubs, at a larger scale.
+
+Where assumptions typically diverge:
+- **data shape** — parameter order, cents vs euros, s vs ms, float for money, int64
+  losing precision in JS, encodings (UTF-8 vs Latin-1), `null` vs missing vs `[]`
+- **ordering** — `order.paid` arriving before `order.created` (partitions, retries)
+- **what happened at all** — timeouts
+
+### Timeouts and idempotency
+
+**Timeouts** are the worst case. A asks B to charge 50 €, B charges but answers slowly,
+A times out and retries, B charges again. Both followed their own logic; they disagree
+on whether the operation happened.
+
+Defence: **idempotency** — A sends an `Idempotency-Key`, B returns the previous result
+for a repeated key instead of executing again. Test it with a stub that answers late or
+drops the connection and then succeeds on retry, and assert the operation ran once.
+
+### What to do about it
+
+1. One shared contract/schema that both sides test against, instead of two private
+   assumptions.
+2. Test unpleasant variants, not only the intended flow: out-of-order, late, duplicate.
+3. Give the integration an owner — otherwise each side is sure its part is fine.
+4. Integrate early. It never works on the first attempt.
